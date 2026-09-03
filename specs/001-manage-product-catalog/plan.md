@@ -161,6 +161,19 @@ framework stacks.
 
 ## Migration, Rollback, and Compatibility
 
+### Approved PR 2 database decisions
+
+- Target MySQL `8.0.46` for this pilot and use `mysql:8.0.46` in Testcontainers. Pomelo uses an
+  explicit `MySqlServerVersion(8, 0, 46)`; runtime and design-time setup must not use AutoDetect.
+- Use `utf8mb4`. Store SKU uppercase (maximum 64) and enforce its case-insensitive unique index with
+  `utf8mb4_0900_ai_ci`. Name is limited to 200, description to 2000, and audit actors to 200.
+- Currency is configuration-only: `Catalog:Currency=SGD`; Product has no Currency column in PR 2.
+- Preserve required `ModifiedAtUtc` and `ModifiedBy` terminology. Version is an optimistic
+  concurrency token, and physical deletion is unsupported.
+- MySQL 8.0 reached end of life in April 2026 and is unsuitable for a new production deployment.
+  Production release is blocked until MySQL 8.4 LTS compatibility is validated or the EF/provider
+  stack is upgraded.
+
 - Create and review an initial migration for both tables; generate SQL for target MySQL and validate
   it from empty state in a container. Confirm restore point, migrate, deploy, smoke-test, then monitor.
 - Roll back binaries first while additive tables remain. Once data exists, prefer route disablement
@@ -191,11 +204,10 @@ provided before their affected task begins:
 
 1. Existing authentication scheme, issuer/audience, ProductRead claim/value, ProductWrite
    claim/value, and stable actor claim. These values block the first endpoint implementation.
-2. Approved field lengths and SKU character policy. Provisional: SKU 64, name 200, description 2000.
-3. Target MySQL version, UUID storage convention, and collation. Design assumes UUID text plus a
-   separately normalized SKU with binary uniqueness.
-4. Catalog currency/serialization. One currency and `decimal(18,2)` are assumed; conversion, tax,
-   discounts, and price history are out of scope.
+2. SKU character policy beyond required trimmed uppercase storage; lengths are approved.
+3. MySQL 8.4 LTS compatibility or provider upgrade required before production release.
+4. Currency serialization in later API contracts; `SGD` configuration is approved, while conversion,
+   tax, discounts, and price history are out of scope.
 5. Audit retention, access/tamper policy, sink availability, and actor-field visibility.
 6. Telemetry exporter/backend and normal-load profile for the two-second p95 target.
 7. Whether a versioned route is mandated. Otherwise `/api/products` is the baseline.

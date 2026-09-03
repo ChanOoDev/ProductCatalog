@@ -5,11 +5,10 @@
 | Field | Logical type | Rules |
 |-------|--------------|-------|
 | Id | UUID | Stable, generated on creation, never client-writable |
-| Sku | String | Required, trimmed, case-insensitively unique, immutable after creation, provisional max 64 |
-| NormalizedSku | String | Required, invariant uppercase, unique, not exposed |
-| Name | String | Required after trim, provisional max 200 |
-| Description | Nullable string | Trimmed; whitespace-only becomes null; provisional max 2000 |
-| Price | Decimal | Greater than zero, max two fractional digits, `decimal(18,2)` |
+| Sku | String | Required, trimmed, stored invariant-uppercase, case-insensitively unique, immutable after creation, max 64 |
+| Name | String | Required after trim, max 200 |
+| Description | Nullable string | Trimmed; whitespace-only becomes null; max 2000 |
+| Price | Decimal | Non-negative, max two fractional digits, `decimal(18,2)` |
 | Status | ProductStatus | Active or Inactive; creation starts Active |
 | CreatedAtUtc / CreatedBy | Timestamp / actor | Required, trusted, immutable |
 | ModifiedAtUtc / ModifiedBy | Timestamp / actor | Required; change only on real mutation |
@@ -40,17 +39,20 @@ or description.
 
 ## MySQL Schema and Constraints
 
-### `products`
+### `Products`
 
-- `id char(36)` primary key, pending confirmation of the organizational UUID convention.
-- Required bounded `sku`, `sku_normalized`, `name`; nullable bounded `description`.
-- Unique binary-comparison index `ux_products_sku_normalized`.
-- `price decimal(18,2) NOT NULL` and `CHECK (price > 0)`.
+- `Id char(36)` primary key.
+- Required `Sku` (64) and `Name` (200); optional `Description` (2000).
+- `Sku` is stored uppercase and has a unique index under `utf8mb4_0900_ai_ci` collation.
+- `Price decimal(18,2) NOT NULL`; non-negative validation remains a domain invariant.
 - Required bounded status and check allowing only Active/Inactive.
-- Required `datetime(6)` UTC timestamps and bounded actor identifiers.
-- `version bigint unsigned NOT NULL DEFAULT 1`, configured as EF concurrency token.
+- Required `datetime(6)` UTC timestamps; `CreatedBy` and `ModifiedBy` are limited to 200 characters.
+- `Version bigint NOT NULL`, configured as an EF concurrency token.
 - Candidate `(status, sku_normalized, id)` index; add other sort indexes only after query-plan data.
 - No global inactive filter or delete path.
+
+Currency is not stored on Product. `Catalog:Currency` is application configuration and is set to
+`SGD`; a later API slice may add the configured value to responses.
 
 ### `product_audit_events`
 
