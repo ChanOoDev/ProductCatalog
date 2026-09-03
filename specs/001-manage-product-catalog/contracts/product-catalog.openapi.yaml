@@ -1,0 +1,166 @@
+openapi: 3.0.3
+info:
+  title: Product Catalog Administration API
+  version: 1.0.0
+paths:
+  /api/products:
+    get:
+      operationId: searchProducts
+      x-required-permission: ProductRead
+      security: [{ organizationalAuth: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - name: status
+          in: query
+          description: Defaults to active; inactive products require an explicit inactive value.
+          schema:
+            allOf:
+              - { $ref: '#/components/schemas/ProductStatus' }
+            default: active
+        - { name: sort, in: query, schema: { type: string, enum: [sku, name, price, status, createdAt, modifiedAt], default: sku } }
+        - { name: direction, in: query, schema: { type: string, enum: [asc, desc], default: asc } }
+        - { name: pageNumber, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200': { description: Product page, content: { application/json: { schema: { $ref: '#/components/schemas/ProductPage' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createProduct
+      x-required-permission: ProductWrite
+      security: [{ organizationalAuth: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateProductRequest' } } } }
+      responses:
+        '201':
+          description: Product created
+          headers: { Location: { schema: { type: string, format: uri } }, ETag: { schema: { type: string } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/products/{id}:
+    parameters: [{ $ref: '#/components/parameters/ProductId' }]
+    get:
+      operationId: getProduct
+      x-required-permission: ProductRead
+      security: [{ organizationalAuth: [] }]
+      responses:
+        '200':
+          description: Product detail
+          headers: { ETag: { schema: { type: string } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateProduct
+      x-required-permission: ProductWrite
+      security: [{ organizationalAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateProductRequest' } } } }
+      responses:
+        '200':
+          description: Product updated
+          headers: { ETag: { schema: { type: string } } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/products/{id}/activation:
+    parameters: [{ $ref: '#/components/parameters/ProductId' }, { $ref: '#/components/parameters/IfMatch' }]
+    post:
+      operationId: activateProduct
+      x-required-permission: ProductWrite
+      security: [{ organizationalAuth: [] }]
+      responses:
+        '200': { description: Active product or current-version no-op, headers: { ETag: { schema: { type: string } } }, content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/products/{id}/deactivation:
+    parameters: [{ $ref: '#/components/parameters/ProductId' }, { $ref: '#/components/parameters/IfMatch' }]
+    post:
+      operationId: deactivateProduct
+      x-required-permission: ProductWrite
+      security: [{ organizationalAuth: [] }]
+      responses:
+        '200': { description: Inactive product or current-version no-op, headers: { ETag: { schema: { type: string } } }, content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+components:
+  securitySchemes:
+    organizationalAuth:
+      type: http
+      scheme: bearer
+      description: Provisional documentation placeholder; replace with the application's approved existing authentication scheme before endpoint implementation.
+  parameters:
+    ProductId: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    IfMatch: { name: If-Match, in: header, required: true, schema: { type: string }, description: Strong opaque product ETag }
+  schemas:
+    ProductStatus: { type: string, enum: [active, inactive] }
+    CreateProductRequest:
+      type: object
+      additionalProperties: false
+      required: [sku, name, price]
+      properties:
+        sku: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 200 }
+        description: { type: string, nullable: true, maxLength: 2000 }
+        price: { type: number, format: decimal, minimum: 0.01, multipleOf: 0.01 }
+    UpdateProductRequest:
+      type: object
+      additionalProperties: false
+      required: [name, price]
+      properties:
+        name: { type: string, maxLength: 200 }
+        description: { type: string, nullable: true, maxLength: 2000 }
+        price: { type: number, format: decimal, minimum: 0.01, multipleOf: 0.01 }
+    Product:
+      type: object
+      required: [id, sku, name, price, status, createdAtUtc, createdBy, modifiedAtUtc, modifiedBy]
+      properties:
+        id: { type: string, format: uuid }
+        sku: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        price: { type: number, format: decimal }
+        status: { $ref: '#/components/schemas/ProductStatus' }
+        createdAtUtc: { type: string, format: date-time }
+        createdBy: { type: string }
+        modifiedAtUtc: { type: string, format: date-time }
+        modifiedBy: { type: string }
+    ProductPage:
+      type: object
+      required: [items, pageNumber, pageSize, totalItemCount, totalPageCount]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Product' } }
+        pageNumber: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        totalItemCount: { type: integer, minimum: 0 }
+        totalPageCount: { type: integer, minimum: 0 }
+    ProblemDetails:
+      type: object
+      required: [type, title, status, traceId]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+        errors: { type: object, additionalProperties: { type: array, items: { type: string } } }
+  responses:
+    BadRequest: { description: Invalid request, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } } }
+    Unauthorized: { description: Authentication required, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } } }
+    Forbidden: { description: Administrator permission required, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } } }
+    NotFound: { description: Product not found, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } } }
+    Conflict: { description: Duplicate SKU or stale product version, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } } }
